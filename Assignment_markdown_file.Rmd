@@ -1,0 +1,171 @@
+Reproducible Research Assignment
+================================
+
+loading data
+============
+
+```{r}
+if(!file.exists('activity.csv')){
+    unzip('repdata_data_activity.zip')
+}
+activityData <- read.csv('activity.csv')
+```
+Processing the data 
+
+From the summary of the dataset we can see that the column containing the dates is not properly formatted to a Date class so we will adjust that now.
+```{r}
+activityData$date <- as.Date(activityData$date)
+str(activityData)
+#activityData$interval <- strptime(gsub("([0-9]{1,2})([0-9]{2})", "\\1:\\2", activityData$interval), format='%H:%M')
+```
+We can also note that there are some missing values in the column of the steps, so let's count them.
+```{r}
+sum(is.na(activityData$steps))
+
+```
+
+Total number of steps taken in each day
+
+We caliculated that there are 2304 missing values, that will be excluded temporarily from our analysis.
+The dataset called "activity_rm" is created for this reason.
+```{r}
+activity_rm<-activityData[which(!is.na(activityData$steps)),]
+```
+
+```{r}
+
+stepsInDay <- tapply(activityData$steps, activityData$date, sum, na.rm=TRUE)
+```
+Histogram for total number of steps taken in each day
+```{r}
+hist(stepsInDay,10, main = "Total number of steps taken per day", xlab='Total stepsin each day', ylab='Frequency',border = "blue",col = "red")
+```
+
+Caliculating mean and median total number of steps taken in each day
+```{r}
+rmean<- mean(stepsInDay)
+rmedian<-median(stepsInDay)
+
+```
+
+Time series plot of the average number of steps taken
+
+```{r}
+#steps_by_interval <- aggregate(steps ~ interval, activityData, mean)
+steps_by_interval<-tapply(activity_rm$steps, activity_rm$interval, mean)
+plot(y = steps_by_interval, x = names(steps_by_interval), type = "l", xlab = "5-Minute-Interval", 
+    main = "Daily Activity Pattern", ylab = "Average number of steps")
+#plot(steps_by_interval$interval,steps_by_interval$steps, type="l", xlab="5 minuts Interval", ylab="Number of Steps",main="Average Number of Stepsin  each Day by Interval")
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps
+
+```{r}
+max_interval <- steps_by_interval[max(steps_by_interval)]
+max_interval
+
+```
+Code to describe and show a strategy for imputing missing data
+==============================================================
+As discussed earlier in this report, there are a number os days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+let's check that the other two variables do not have any missing data.
+
+```{r}
+sum(is.na(activityData$steps))
+```
+
+```{r}
+sum(is.na(activityData))
+```
+
+The count of missing values for the column of steps equals to the total number missing in the whole dataset, so we can be sure that the intervals and the dates do not have any.
+So, 2304 missing values is a percentage of 13.11% on the total observations, so obviously there will be some bias. 
+In order to exclude the bias we have to come up with a method for filling in all of the missing values in the dataset. Some quick ways are to use the mean/median for that day, or the mean for that 5-minute interval, etc.
+We will go with the option of using the mean of the 5-minute interval, and thus we will now reate a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+act_new <- activityData
+act_new[which(is.na(act_new$steps)),1]<-
+        steps_by_interval[as.character(act_new[which(is.na(act_new$steps)),3])]
+
+```
+
+No missing values are now in the new dataset: 
+
+```{r}
+sum(is.na(act_new))
+```
+
+```{r}
+stepsInDay_new<-tapply(act_new$steps, act_new$date, sum)
+```
+
+Now let's make the same histogram, that we made in the first part of the analysis, in order to visually see if there is a big effect.
+
+```{r}
+par(mfrow=c(1,2))
+hist(stepsInDay,10, border='yellow',col='red',main = "Total number of steps taken in each day", xlab = "Steps"
+     , ylim =c(0, 25))
+abline(v = median(stepsInDay), col = 4, lwd = 4)
+
+hist(stepsInDay_new,10,border = 'green',col='pink', main = "Total number of steps taken per day  
+     (missing values replaced)", xlab = "Steps",
+     ylim =c(0, 25))
+abline(v = median(stepsInDay_new), col = 4, lwd = 4)
+```
+
+We now calculate the median and the mean of the filled in dataset
+
+```{r}
+mean(stepsInDay_new)
+```
+
+```{r}
+median(stepsInDay_new)
+
+```
+
+The impact of inputting missing data is minimal, as only the median seems to be changing but by just over one step.
+
+```{r}
+mean(stepsInDay_new)-mean(stepsInDay)
+```
+
+```{r}
+median(stepsInDay_new)-median(stepsInDay)
+
+```
+
+Are there differences in activity patterns between weekdays and weekends?
+
+In this part of the assigment, we will create factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}
+act_new$wd<-weekdays(act_new$date)
+act_new$fwd<- as.factor(c("weekend", "weekday"))
+act_new[act_new$wd == "Sunday" | act_new$wd == "Saturday" ,5]<- factor("weekend")
+act_new[!(act_new$wd == "Sunday" | act_new$wd == "Saturday"),5 ]<- factor("weekday")
+```
+
+
+Now we will create two aggregated arrays for the total number of steps taken per 5-minyute time interval for weekdays and weekends, and make a graph in order to compare it there is a difference.
+Note that the plot has been created in the base system.
+
+
+```{r}
+act_new_we <- subset(act_new, fwd == "weekend") 
+act_new_wd <- subset(act_new, fwd == "weekday") 
+dailyact_we<-tapply(act_new_we$steps, act_new_we$interval, mean)
+dailyact_wd<-tapply(act_new_wd$steps, act_new_wd$interval, mean)
+par(mfrow=c(2,1))
+plot(y = dailyact_wd, x = names(dailyact_wd), type = "l", xlab = "5-Minute Interval", 
+     main = "Daily Activity Pattern on Weekdays", ylab = "Average number of steps", 
+     ylim =c(0, 250))
+plot(y = dailyact_we, x = names(dailyact_we), type = "l", xlab = "5-Minute Interval", 
+     main = "Daily Activity Pattern on Weekends", ylab = "Average number of steps", 
+     ylim =c(0, 250))
+```
+
+
+From the two graphs, we can clearly see that the distribution throughout the day is quite different. First of all, the individua from whom the measurements were taken, seem sto wake up at least one hour later at the weekends. Another interesting finding is that there is a huge amount of steps taken on weekdays, possibly while going to work or working out, which does not appear on Saturdays or Sundays. Generally, the whole weekend seems to be more evenly distributed with no huge deviations during hours when a normal person is expected to be awake and active. But, we can observe on average more steps during a weekend day, than on a "working" day. So, this individual is currently employed (or a volunteer), he/she does not take the car to and from work. As far as his/her job is concerned, he/she is not a teacher (as my teacher wife claims) or a waiter.
+Please, once more, keep in mind that the x-axis point labels are the names of the intervals in the dataset. The coding of the interval names is such, so that e.g. 500 should be conidered as 5:00 and 1000 as 10:00, ans so on. So, one can consider th x-axis as a full 24-hour-day starting from midnight and ending at the next midnight hour.
